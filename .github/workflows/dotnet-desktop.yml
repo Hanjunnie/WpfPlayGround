@@ -81,7 +81,7 @@ jobs:
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
     - name: Build MSIX package
-      run: msbuild ./WpfPlayGround_msix/WpfPlayGround_msix.wapproj /p:Configuration=Release /restore
+      run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
 
     - name: Print current directory and contents
       run: |
