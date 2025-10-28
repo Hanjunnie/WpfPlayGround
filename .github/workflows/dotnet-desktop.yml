@@ -80,18 +80,18 @@ jobs:
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
-    - name: Debug path check
+    - name: Debug MSIX folder
       run: |
-        echo "Current dir:"
+        echo "=== Current directory ==="
         pwd
-        echo "Contents of parent directory:"
-        dir ..
-        echo "Contents of ../WpfPlayGround_:"
-        dir ../WpfPlayGround
+        echo "=== WpfPlayGround_msix contents ==="
+        dir ./WpfPlayGround_msix
       shell: pwsh
-    
+
+
     - name: Build MSIX package
-      run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
+      run: msbuild ./WpfPlayGround_msix/WpfPlayGround_msix.wapproj /p:Configuration=Release /restore
+
 
     - name: Upload MSIX to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
