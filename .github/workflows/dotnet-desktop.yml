@@ -76,6 +76,9 @@ jobs:
     # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
+      
+    - name: Add DevExpress NuGet feed
+      run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
     - name: Build MSIX package
       run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
