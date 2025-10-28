@@ -83,14 +83,6 @@ jobs:
     - name: Build MSIX package
       run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
 
-    - name: Print current directory and contents
-      run: |
-        echo "Current working directory:"
-        pwd
-        echo "List contents:"
-        dir
-      shell: pwsh
-
     - name: Upload to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
