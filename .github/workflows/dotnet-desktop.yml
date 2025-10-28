@@ -80,6 +80,16 @@ jobs:
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
+    - name: Debug path check
+      run: |
+        echo "Current dir:"
+        pwd
+        echo "Contents of parent directory:"
+        dir ..
+        echo "Contents of ../WpfPlayGround_msix:"
+        dir ../WpfPlayGround_msix
+      shell: pwsh
+    
     - name: Build MSIX package
       run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
 
