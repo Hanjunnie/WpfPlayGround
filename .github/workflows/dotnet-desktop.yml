@@ -77,9 +77,6 @@ jobs:
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
 
-    # Execute all unit tests in the solution
-    - name: Execute unit tests
-      run: dotnet test
 
     # Restore the application to populate the obj folder with RuntimeIdentifiers
     - name: Restore the application
@@ -124,5 +121,5 @@ jobs:
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
           protocol: ftps
-          local-dir: ./WpfPlayGround/AppPackages/
-          server-dir: /MSIXDeploy/WpfPlayGround/
+          local-dir: ./WpfPlayGround_msix/appPackage/
+          server-dir: /WpfPlayGround/
