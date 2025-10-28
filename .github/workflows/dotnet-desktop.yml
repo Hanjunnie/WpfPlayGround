@@ -90,5 +90,5 @@ jobs:
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
           protocol: ftps
-          local-dir: ${{ github.workspace }}/WpfPlayGround_msix/appPackage/
+          local-dir: ./WpfPlayGround_msix/appPackage/
           server-dir: /WpfPlayGround/
