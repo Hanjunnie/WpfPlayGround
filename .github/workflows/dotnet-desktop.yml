@@ -89,7 +89,7 @@ jobs:
         $ftpServer = "${{ secrets.FTP_HOST }}"
         $ftpUser = "${{ secrets.FTP_USER }}"
         $ftpPass = "${{ secrets.FTP_PASS }}"
-        $localDir = Join-Path $env:GITHUB_WORKSPACE "WpfPlayGround\WpfPlayGround_msix\appPackage"
+        $localDir = "$(Get-Location)\WpfPlayGround\WpfPlayGround_msix\appPackage"
         $remoteDir = "/WpfPlayGround"
 
         Write-Host "Uploading from $localDir to ftp://$ftpServer$remoteDir"
