@@ -91,10 +91,6 @@ jobs:
         dir
       shell: pwsh
 
-    - name: Verify msix folder exists
-      run: dir ./WpfPlayGround/WpfPlayGround_msix
-      shell: pwsh
-
     - name: Upload to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
