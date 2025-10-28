@@ -76,38 +76,32 @@ jobs:
     # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-
-    - name: Print working directory
-      run: |
-        echo "== PWD =="
-        pwd
-        echo "== Folder contents =="
-        dir
-      shell: pwsh
-
       
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
-    - name: Debug MSIX folder
-      run: |
-        echo "=== Current directory ==="
-        pwd
-        echo "=== WpfPlayGround_msix contents ==="
-        dir ./WpfPlayGround_msix
-      shell: pwsh
-
-
     - name: Build MSIX package
       run: msbuild ./WpfPlayGround_msix/WpfPlayGround_msix.wapproj /p:Configuration=Release /restore
 
+    - name: Print current directory and contents
+      run: |
+        echo "Current working directory:"
+        pwd
+        echo "List contents:"
+        dir
+      shell: pwsh
 
-    - name: Upload MSIX to FTP
+    - name: Verify msix folder exists
+      run: dir ./WpfPlayGround/WpfPlayGround_msix
+      shell: pwsh
+
+    - name: Upload to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftps
-          local-dir: ./WpfPlayGround_msix/appPackage/
-          server-dir: /WpfPlayGround/
+        server: ${{ secrets.FTP_HOST }}
+        username: ${{ secrets.FTP_USER }}
+        password: ${{ secrets.FTP_PASS }}
+        protocol: ftps
+        local-dir: ./WpfPlayGround/WpfPlayGround_msix/appPackage/
+        server-dir: /WpfPlayGround/
+
