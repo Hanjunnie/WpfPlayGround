@@ -86,8 +86,8 @@ jobs:
         pwd
         echo "Contents of parent directory:"
         dir ..
-        echo "Contents of ../WpfPlayGround_msix:"
-        dir ../WpfPlayGround_msix
+        echo "Contents of ../WpfPlayGround_:"
+        dir ../WpfPlayGround
       shell: pwsh
     
     - name: Build MSIX package
