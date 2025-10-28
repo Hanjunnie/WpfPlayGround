@@ -83,13 +83,25 @@ jobs:
     - name: Build MSIX package
       run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
 
-    - name: Upload to FTP
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-      with:
-        server: ${{ secrets.FTP_HOST }}
-        username: ${{ secrets.FTP_USER }}
-        password: ${{ secrets.FTP_PASS }}
-        protocol: ftps
-        local-dir: ./WpfPlayGround_msix/
-        server-dir: /WpfPlayGround/
+    - name: Upload MSIX manually via PowerShell FTP
+      shell: pwsh
+      run: |
+        $ftpServer = "${{ secrets.FTP_HOST }}"
+        $ftpUser = "${{ secrets.FTP_USER }}"
+        $ftpPass = "${{ secrets.FTP_PASS }}"
+        $localDir = "$(Get-Location)\WpfPlayGround_msix\appPackage"
+        $remoteDir = "/WpfPlayGround"
+
+        Write-Host "Uploading from $localDir to ftp://$ftpServer$remoteDir"
+
+        foreach ($file in Get-ChildItem -Path $localDir -File) {
+        $uri = "ftp://$ftpServer$remoteDir/$($file.Name)"
+        Write-Host "Uploading $uri ..."
+        $webclient = New-Object System.Net.WebClient
+        $webclient.Credentials = New-Object System.Net.NetworkCredential($ftpUser, $ftpPass)
+        $webclient.UploadFile($uri, "STOR", $file.FullName)
+        }
+
+        Write-Host "✅ FTP upload completed."
+
 
