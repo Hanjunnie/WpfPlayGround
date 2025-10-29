@@ -21,7 +21,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <TextBlock Name="HelloWPF" Grid.Row="0" Text="Hello WPF!" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         <dex:TextEdit x:Name="devTextBlock" Grid.Row="1" EditValue="{Binding UserName, UpdateSourceTrigger=PropertyChanged, Mode=OneWay}"  Width="200" FontSize="14"/>
@@ -30,6 +31,7 @@
         <local:StringMulltiConverterView Grid.Row="4"/>
         <local:DataTempView Grid.Row ="5"/>
         <local:SelectorView Grid.Row ="6"/>
+        <local:SelectorView Grid.Row ="7"/>
     </Grid>
         
 </UserControl>

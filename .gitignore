@@ -2,3 +2,18 @@
 bin/
 obj/
 *.user
+
+# MSIX 인증서 파일
+*.pfx
+*.cer
+*_TemporaryKey.pfx
+
+certificate_base64.txt
+
+# MSIX 패키징 출력
+AppPackages/
+BundleArtifacts/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle

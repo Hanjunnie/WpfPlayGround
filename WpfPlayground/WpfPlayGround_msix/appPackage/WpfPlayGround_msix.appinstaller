@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+	Uri="file:///D:/project/PlayGround/WpfPlayground/WpfPlayGround_msix/appPackage/WpfPlayGround_msix.appinstaller"
+	Version="1.0.1.0" xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2">
+	<MainBundle
+		Name="ad559ba3-2fdf-420f-a7a4-821aff4bde4b"
+		Version="1.0.1.0"
+		Publisher="CN=jhhan1"
+		Uri="file:///D:/project/PlayGround/WpfPlayground/WpfPlayGround_msix/appPackage/WpfPlayGround_msix_1.0.1.0_Test/WpfPlayGround_msix_1.0.1.0_x64.msixbundle" />
+	<UpdateSettings>
+		<OnLaunch
+			HoursBetweenUpdateChecks="0" />
+	</UpdateSettings>
+</AppInstaller>

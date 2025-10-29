@@ -11,19 +11,23 @@
     <UserControl.DataContext>
         <local:STringMultiConverterViewModel/>
     </UserControl.DataContext>
-    
+
     <UserControl.Resources>
         <utility:StringMultiConverter x:Key="stringMultiConverter"/>
     </UserControl.Resources>
     <Grid>
-        <StackPanel>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="23*"/>
+            <RowDefinition Height="22*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.RowSpan="2">
             <dxe:TextEdit x:Name="firstName" EditValue="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}"/>
             <dxe:TextEdit x:Name="SecondName" EditValue="{Binding LastName, UpdateSourceTrigger=PropertyChanged}"/>
             <TextBlock FontWeight ="Bold" FontSize="14">
                 <TextBlock.Text>
                     <MultiBinding Converter="{StaticResource stringMultiConverter}">
                         <Binding Path="FirstName"/>
-                        <Binding Path="LastName"/> 
+                        <Binding Path="LastName"/>
                     </MultiBinding>
                 </TextBlock.Text>
             </TextBlock>
