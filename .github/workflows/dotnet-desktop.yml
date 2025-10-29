@@ -80,35 +80,90 @@ jobs:
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
 
-    - name: Build MSIX package
-      run: dotnet publish ./WpfPlayGround/WpfPlayGround.csproj -c Release -p:GenerateAppxPackageOnBuild=true
-
-    - name: Upload MSIX manually via PowerShell FTP
-      shell: pwsh
+    - name: Decode certificate
       run: |
-        $ftpServer = "${{ secrets.FTP_HOST }}"
-        $ftpUser = "${{ secrets.FTP_USER }}"
-        $ftpPass = "${{ secrets.FTP_PASS }}"
-        $localDir = Join-Path $env:GITHUB_WORKSPACE "WpfPlayGround\WpfPlayGround_msix\appPackage"
-        $remoteDir = "/WpfPlayGround"
+        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
+        $pfxPath = Join-Path $env:TEMP "certificate.pfx"
+        [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+        echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "Certificate prepared at: $pfxPath"
+      shell: pwsh
 
-        Write-Host "Uploading from $localDir to ftp://$ftpServer$remoteDir"
+    - name: Build MSIX package
+      run: |
+        msbuild ${{ env.MSIX_PROJECT_PATH }} `
+          /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
+          /p:Platform=${{ env.BUILD_PLATFORM }} `
+          /p:UapAppxPackageBuildMode=SideloadOnly `
+          /p:AppxBundle=Always `
+          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\" `
+          /p:PackageCertificateKeyFile="${{ env.CERT_PATH }}" `
+          /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}"
+      shell: pwsh
 
-        if (!(Test-Path $localDir)) {
-          Write-Host "❌ ERROR: Local directory not found!"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE
-          exit 1
-          }
+    - name: Get version from package
+      id: version
+      run: |
+        $manifestPath = Get-ChildItem -Path "${{ github.workspace }}\AppPackages\" -Recurse -Filter "AppxManifest.xml" | Select-Object -First 1
+        [xml]$manifest = Get-Content $manifestPath.FullName
+        $version = $manifest.Package.Identity.Version
+        echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "Package version: $version"
+      shell: pwsh
 
-        foreach ($file in Get-ChildItem -Path $localDir -File) {
-          $uri = "ftp://$ftpServer$remoteDir/$($file.Name)"
-          Write-Host "Uploading $($file.Name)..."
-          $webclient = New-Object System.Net.WebClient
-          $webclient.Credentials = New-Object System.Net.NetworkCredential($ftpUser, $ftpPass)
-          $webclient.UploadFile($uri, "STOR", $file.FullName)
+    - name: Upload to FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: ${{ secrets.FTP_PORT || 21 }}
+        protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+        local-dir: ./AppPackages/
+        server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
+        dangerous-clean-slate: false
+
+    - name: Create version file
+      run: |
+        $versionInfo = @{
+          version = "${{ steps.version.outputs.VERSION }}"
+          buildDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+          commitHash = "${{ github.sha }}"
+          commitMessage = "${{ github.event.head_commit.message }}"
         }
+        $versionInfo | ConvertTo-Json | Out-File -FilePath "version.json"
+      shell: pwsh
 
-        Write-Host "✅ FTP upload completed."
+    - name: Upload version file to FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: ${{ secrets.FTP_PORT || 21 }}
+        protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+        local-dir: ./
+        server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
+        dangerous-clean-slate: false
+        include: version.json
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: MSIX-Package-${{ steps.version.outputs.VERSION }}
+        path: ./AppPackages/**/*
+        retention-days: 30
+
+    # 🧹 정리 (선택사항)
+    - name: Cleanup certificate
+      if: always()
+      run: |
+        if (Test-Path $env:CERT_PATH) {
+          Remove-Item $env:CERT_PATH -Force
+          Write-Host "Certificate file cleaned up"
+        }
+      shell: pwsh
+      
 
 
 
