@@ -66,8 +66,8 @@ jobs:
     # ⭐ 작업 디렉토리를 src로 변경
     - name: Set working directory
       run: |
-        Write-Host "작업 디렉토리 변경: ${{ github.workspace }}\src"
-        cd "${{ github.workspace }}\src"
+        Write-Host "작업 디렉토리 변경: ${{ github.workspace }}\"
+        cd "${{ github.workspace }}"
         Write-Host "현재 위치: $PWD"
       shell: pwsh
 
