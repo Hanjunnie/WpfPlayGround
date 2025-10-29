@@ -51,7 +51,7 @@ env:
   
   # MSIX 프로젝트 설정
   Wap_Project_Directory: WpfPlayGround_msix
-  Wap_Project_Path: WpfPlayGround_msix/WpfPlayGround_msix.wapproj
+  Wap_Project_Path: WpfPlayGround_msix\WpfPlayGround_msix.wapproj
   
   # 빌드 설정
   BUILD_CONFIGURATION: Release
