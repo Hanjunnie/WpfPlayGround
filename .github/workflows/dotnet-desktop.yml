@@ -48,6 +48,7 @@ env:
   # 프로젝트 기본 설정
   PROJECT_NAME: WpfPlayGround
   Solution_Name: wpfplayGround.sln
+  App_Project_Path: WpfPlayGround/WpfPlayGround.csproj
   
   # MSIX 프로젝트 설정
   Wap_Project_Directory: WpfPlayGround_msix
