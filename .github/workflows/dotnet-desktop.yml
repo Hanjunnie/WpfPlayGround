@@ -101,17 +101,114 @@ jobs:
         Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
 
-    # Build MSIX package
+    - name: Detect MSIX project path
+      id: detect
+      run: |
+        Write-Host "=== 프로젝트 구조 확인 ===" -ForegroundColor Cyan
+        Write-Host "작업 디렉토리: $PWD`n"
+        
+        # 전체 디렉토리 구조 출력
+        Write-Host "디렉토리 구조:" -ForegroundColor Yellow
+        Get-ChildItem -Recurse -Depth 2 -Directory | Select-Object FullName | ForEach-Object {
+          $relativePath = $_.FullName.Replace($PWD, ".").Replace("\", "/")
+          Write-Host "  $relativePath"
+        }
+        Write-Host ""
+        
+        # .wapproj 파일 검색
+        Write-Host "=== .wapproj 파일 검색 ===" -ForegroundColor Cyan
+        $waprojFiles = Get-ChildItem -Filter "*.wapproj" -Recurse -File -ErrorAction SilentlyContinue
+        
+        if ($waprojFiles.Count -eq 0) {
+          Write-Host "❌ .wapproj 파일을 찾을 수 없습니다!" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "현재 디렉토리의 모든 파일:" -ForegroundColor Yellow
+          Get-ChildItem -Recurse -File | Where-Object { $_.Extension -in @('.sln', '.csproj', '.wapproj') } | Select-Object FullName
+          exit 1
+        }
+        
+        Write-Host "발견된 .wapproj 파일:" -ForegroundColor Green
+        foreach ($file in $waprojFiles) {
+          $relativePath = $file.FullName.Replace("$PWD\", "")
+          Write-Host "  - $relativePath" -ForegroundColor White
+        }
+        Write-Host ""
+        
+        # 첫 번째 파일 사용
+        $selectedWaproj = $waprojFiles[0]
+        $waprojPath = $selectedWaproj.FullName
+        $waprojDir = Split-Path $waprojPath -Parent
+        $waprojDirName = Split-Path $waprojDir -Leaf
+        
+        Write-Host "✓ 사용할 프로젝트:" -ForegroundColor Green
+        Write-Host "  전체 경로: $waprojPath" -ForegroundColor Gray
+        Write-Host "  디렉토리: $waprojDirName" -ForegroundColor Gray
+        Write-Host ""
+        
+        # 환경 변수로 설정
+        echo "WAPROJ_PATH=$waprojPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "WAPROJ_DIR=$waprojDirName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        
+        Write-Host "환경 변수 설정 완료!" -ForegroundColor Green
+      shell: pwsh
+
+    - name: Decode certificate
+      run: |
+        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
+        $pfxPath = Join-Path $env:TEMP "certificate.pfx"
+        [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+        echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "✓ Certificate prepared at: $pfxPath"
+      shell: pwsh
+
+    # ✅ 자동 감지된 경로로 빌드
     - name: Build MSIX package
       run: |
-        msbuild ${{ env.Wap_Project_Path }} `
+        Write-Host "=== MSIX 패키지 빌드 ===" -ForegroundColor Cyan
+        Write-Host "프로젝트 경로: $env:WAPROJ_PATH" -ForegroundColor Gray
+        Write-Host "인증서 경로: $env:CERT_PATH" -ForegroundColor Gray
+        Write-Host ""
+        
+        if (-not (Test-Path $env:WAPROJ_PATH)) {
+          Write-Host "❌ 프로젝트 파일이 존재하지 않습니다: $env:WAPROJ_PATH" -ForegroundColor Red
+          exit 1
+        }
+        
+        Write-Host "빌드 시작..." -ForegroundColor Yellow
+        
+        msbuild "$env:WAPROJ_PATH" `
           /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
           /p:Platform=${{ env.BUILD_PLATFORM }} `
           /p:UapAppxPackageBuildMode=SideloadOnly `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\" `
-          /p:PackageCertificateKeyFile="${{ env.CERT_PATH }}" `
-          /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}"
+          /p:PackageCertificateKeyFile="$env:CERT_PATH" `
+          /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}" `
+          /verbosity:minimal
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ 빌드 성공!" -ForegroundColor Green
+        } else {
+          Write-Host "❌ 빌드 실패!" -ForegroundColor Red
+          exit $LASTEXITCODE
+        }
+      shell: pwsh
+
+    - name: Verify build output
+      run: |
+        Write-Host "=== 빌드 결과 확인 ===" -ForegroundColor Cyan
+        
+        if (Test-Path "${{ github.workspace }}\AppPackages") {
+          Write-Host "AppPackages 폴더 내용:" -ForegroundColor Yellow
+          Get-ChildItem -Path "${{ github.workspace }}\AppPackages" -Recurse -File | 
+            Where-Object { $_.Extension -in @('.msix', '.msixbundle', '.appx', '.appxbundle') } |
+            ForEach-Object {
+              $size = [math]::Round($_.Length / 1MB, 2)
+              Write-Host "  ✓ $($_.Name) ($size MB)" -ForegroundColor Green
+            }
+        } else {
+          Write-Host "⚠ AppPackages 폴더가 생성되지 않았습니다" -ForegroundColor Yellow
+        }
       shell: pwsh
 
     # Get version from package
