@@ -36,7 +36,7 @@
 # For a complete CI/CD sample to get started with GitHub Action workflows for Desktop Applications,
 # refer to https://github.com/microsoft/github-actions-for-desktop-apps
 
-name: .NET Core Desktop
+name: .NET Core Desktop - MSIX Deploy
 
 on:
   push:
@@ -44,17 +44,22 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  # 프로젝트 기본 설정
+  PROJECT_NAME: WpfPlayGround
+  Solution_Name: wpfplayGround.sln
+  
+  # MSIX 프로젝트 설정
+  Wap_Project_Directory: WpfPlayGround_msix
+  Wap_Project_Path: WpfPlayGround_msix/WpfPlayGround_msix.wapproj
+  
+  # 빌드 설정
+  BUILD_CONFIGURATION: Release
+  BUILD_PLATFORM: x64
+
 jobs:
-
   build:
-    runs-on: windows-latest  # For a list of available runner types, refer to
-                             # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
-
-    env:
-      Solution_Name: wpfplayGround.sln                         # Replace with your solution name, i.e. MyWpfApp.sln.
-      Test_Project_Path: your-test-project-path                 # Replace with the path to your test project, i.e. MyWpfApp.Tests\MyWpfApp.Tests.csproj.
-      Wap_Project_Directory: WpfPlayGround_msix                        # Replace with the Wap project directory relative to the solution, i.e. MyWpfApp.Package.
-      Wap_Project_Path: WpfPlayGround_msix/WpfPlayGround_msix.wapproj                   # Replace with the path to your Wap project, i.e. MyWpf.App.Package\MyWpfApp.Package.wapproj.
+    runs-on: windows-latest
 
     steps:
     - name: Checkout
@@ -68,25 +73,37 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+    # Add MSBuild to the PATH
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
       
+    # Setup NuGet
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+      
+    # Add DevExpress NuGet feed
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
+      continue-on-error: true  # DevExpress가 없어도 계속 진행
 
+    # Restore NuGet packages
+    - name: Restore NuGet packages
+      run: nuget restore ${{ env.Solution_Name }}
+
+    # Decode certificate
     - name: Decode certificate
       run: |
         $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
         $pfxPath = Join-Path $env:TEMP "certificate.pfx"
         [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
         echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Host "Certificate prepared at: $pfxPath"
+        Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
 
+    # Build MSIX package
     - name: Build MSIX package
       run: |
-        msbuild ${{ env.MSIX_PROJECT_PATH }} `
+        msbuild ${{ env.Wap_Project_Path }} `
           /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
           /p:Platform=${{ env.BUILD_PLATFORM }} `
           /p:UapAppxPackageBuildMode=SideloadOnly `
@@ -96,16 +113,23 @@ jobs:
           /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}"
       shell: pwsh
 
+    # Get version from package
     - name: Get version from package
       id: version
       run: |
         $manifestPath = Get-ChildItem -Path "${{ github.workspace }}\AppPackages\" -Recurse -Filter "AppxManifest.xml" | Select-Object -First 1
-        [xml]$manifest = Get-Content $manifestPath.FullName
-        $version = $manifest.Package.Identity.Version
-        echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        echo "Package version: $version"
+        if ($manifestPath) {
+          [xml]$manifest = Get-Content $manifestPath.FullName
+          $version = $manifest.Package.Identity.Version
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "✓ Package version: $version"
+        } else {
+          Write-Host "⚠ AppxManifest.xml not found"
+          echo "VERSION=0.0.0.0" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        }
       shell: pwsh
 
+    # Upload to FTP
     - name: Upload to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -118,6 +142,7 @@ jobs:
         server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
         dangerous-clean-slate: false
 
+    # Create version file
     - name: Create version file
       run: |
         $versionInfo = @{
@@ -127,8 +152,10 @@ jobs:
           commitMessage = "${{ github.event.head_commit.message }}"
         }
         $versionInfo | ConvertTo-Json | Out-File -FilePath "version.json"
+        Write-Host "✓ Version file created"
       shell: pwsh
 
+    # Upload version file to FTP
     - name: Upload version file to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -142,23 +169,20 @@ jobs:
         dangerous-clean-slate: false
         include: version.json
 
+    # Upload artifacts (v4로 업데이트)
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: MSIX-Package-${{ steps.version.outputs.VERSION }}
         path: ./AppPackages/**/*
         retention-days: 30
 
-    # 🧹 정리 (선택사항)
+    # Cleanup certificate
     - name: Cleanup certificate
       if: always()
       run: |
         if (Test-Path $env:CERT_PATH) {
           Remove-Item $env:CERT_PATH -Force
-          Write-Host "Certificate file cleaned up"
+          Write-Host "✓ Certificate file cleaned up"
         }
       shell: pwsh
-      
-
-
-
