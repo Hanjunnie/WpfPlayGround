@@ -36,7 +36,7 @@
 # For a complete CI/CD sample to get started with GitHub Action workflows for Desktop Applications,
 # refer to https://github.com/microsoft/github-actions-for-desktop-apps
 
-name: .NET Core Desktop - MSIX Deploy
+name: .NET Core Desktop - MSIX Deploy (Path Fixed)
 
 on:
   push:
@@ -45,16 +45,9 @@ on:
     branches: [ "main" ]
 
 env:
-  # 프로젝트 기본 설정
   PROJECT_NAME: WpfPlayGround
   Solution_Name: wpfplayGround.sln
-  App_Project_Path: WpfPlayGround/WpfPlayGround.csproj
-  
-  # MSIX 프로젝트 설정
-  Wap_Project_Directory: WpfPlayGround_msix
   Wap_Project_Path: WpfPlayGround_msix\WpfPlayGround_msix.wapproj
-  
-  # 빌드 설정
   BUILD_CONFIGURATION: Release
   BUILD_PLATFORM: x64
 
@@ -63,35 +56,41 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    # ⭐ 중요: 중복된 경로 제거
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        path: src  # ← 추가: 'src' 폴더에 체크아웃
 
-    # Install the .NET Core workload
+    # ⭐ 작업 디렉토리를 src로 변경
+    - name: Set working directory
+      run: |
+        Write-Host "작업 디렉토리 변경: ${{ github.workspace }}\src"
+        cd "${{ github.workspace }}\src"
+        Write-Host "현재 위치: $PWD"
+      shell: pwsh
+
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
 
-    # Add MSBuild to the PATH
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
       
-    # Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
       
-    # Add DevExpress NuGet feed
     - name: Add DevExpress NuGet feed
+      working-directory: ${{ github.workspace }}\src
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
-      continue-on-error: true  # DevExpress가 없어도 계속 진행
+      continue-on-error: true
 
-    # Restore NuGet packages
     - name: Restore NuGet packages
+      working-directory: ${{ github.workspace }}\src
       run: nuget restore ${{ env.Solution_Name }}
 
-    # Decode certificate
     - name: Decode certificate
       run: |
         $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
@@ -101,88 +100,21 @@ jobs:
         Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
 
-    - name: Detect MSIX project path
-      id: detect
-      run: |
-        Write-Host "=== 프로젝트 구조 확인 ===" -ForegroundColor Cyan
-        Write-Host "작업 디렉토리: $PWD`n"
-        
-        # 전체 디렉토리 구조 출력
-        Write-Host "디렉토리 구조:" -ForegroundColor Yellow
-        Get-ChildItem -Recurse -Depth 2 -Directory | Select-Object FullName | ForEach-Object {
-          $relativePath = $_.FullName.Replace($PWD, ".").Replace("\", "/")
-          Write-Host "  $relativePath"
-        }
-        Write-Host ""
-        
-        # .wapproj 파일 검색
-        Write-Host "=== .wapproj 파일 검색 ===" -ForegroundColor Cyan
-        $waprojFiles = Get-ChildItem -Filter "*.wapproj" -Recurse -File -ErrorAction SilentlyContinue
-        
-        if ($waprojFiles.Count -eq 0) {
-          Write-Host "❌ .wapproj 파일을 찾을 수 없습니다!" -ForegroundColor Red
-          Write-Host ""
-          Write-Host "현재 디렉토리의 모든 파일:" -ForegroundColor Yellow
-          Get-ChildItem -Recurse -File | Where-Object { $_.Extension -in @('.sln', '.csproj', '.wapproj') } | Select-Object FullName
-          exit 1
-        }
-        
-        Write-Host "발견된 .wapproj 파일:" -ForegroundColor Green
-        foreach ($file in $waprojFiles) {
-          $relativePath = $file.FullName.Replace("$PWD\", "")
-          Write-Host "  - $relativePath" -ForegroundColor White
-        }
-        Write-Host ""
-        
-        # 첫 번째 파일 사용
-        $selectedWaproj = $waprojFiles[0]
-        $waprojPath = $selectedWaproj.FullName
-        $waprojDir = Split-Path $waprojPath -Parent
-        $waprojDirName = Split-Path $waprojDir -Leaf
-        
-        Write-Host "✓ 사용할 프로젝트:" -ForegroundColor Green
-        Write-Host "  전체 경로: $waprojPath" -ForegroundColor Gray
-        Write-Host "  디렉토리: $waprojDirName" -ForegroundColor Gray
-        Write-Host ""
-        
-        # 환경 변수로 설정
-        echo "WAPROJ_PATH=$waprojPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "WAPROJ_DIR=$waprojDirName" | Out-File -FilePath $env:GITHUB_ENV -Append
-        
-        Write-Host "환경 변수 설정 완료!" -ForegroundColor Green
-      shell: pwsh
-
-    - name: Decode certificate
-      run: |
-        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
-        $pfxPath = Join-Path $env:TEMP "certificate.pfx"
-        [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-        echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Host "✓ Certificate prepared at: $pfxPath"
-      shell: pwsh
-
-    # ✅ 자동 감지된 경로로 빌드
     - name: Build MSIX package
+      working-directory: ${{ github.workspace }}\src
       run: |
         Write-Host "=== MSIX 패키지 빌드 ===" -ForegroundColor Cyan
-        Write-Host "프로젝트 경로: $env:WAPROJ_PATH" -ForegroundColor Gray
-        Write-Host "인증서 경로: $env:CERT_PATH" -ForegroundColor Gray
+        Write-Host "작업 디렉토리: $PWD" -ForegroundColor Gray
+        Write-Host "프로젝트 경로: ${{ env.Wap_Project_Path }}" -ForegroundColor Gray
         Write-Host ""
         
-        if (-not (Test-Path $env:WAPROJ_PATH)) {
-          Write-Host "❌ 프로젝트 파일이 존재하지 않습니다: $env:WAPROJ_PATH" -ForegroundColor Red
-          exit 1
-        }
-        
-        Write-Host "빌드 시작..." -ForegroundColor Yellow
-        
-        msbuild "$env:WAPROJ_PATH" `
+        msbuild ${{ env.Wap_Project_Path }} `
           /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
           /p:Platform=${{ env.BUILD_PLATFORM }} `
           /p:UapAppxPackageBuildMode=SideloadOnly `
           /p:AppxBundle=Always `
-          /p:AppxPackageDir="${{ github.workspace }}\AppPackages\" `
-          /p:PackageCertificateKeyFile="$env:CERT_PATH" `
+          /p:AppxPackageDir="${{ github.workspace }}\src\AppPackages\" `
+          /p:PackageCertificateKeyFile="${{ env.CERT_PATH }}" `
           /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}" `
           /verbosity:minimal
         
@@ -195,27 +127,31 @@ jobs:
       shell: pwsh
 
     - name: Verify build output
+      working-directory: ${{ github.workspace }}\src
       run: |
         Write-Host "=== 빌드 결과 확인 ===" -ForegroundColor Cyan
         
-        if (Test-Path "${{ github.workspace }}\AppPackages") {
-          Write-Host "AppPackages 폴더 내용:" -ForegroundColor Yellow
-          Get-ChildItem -Path "${{ github.workspace }}\AppPackages" -Recurse -File | 
-            Where-Object { $_.Extension -in @('.msix', '.msixbundle', '.appx', '.appxbundle') } |
-            ForEach-Object {
-              $size = [math]::Round($_.Length / 1MB, 2)
-              Write-Host "  ✓ $($_.Name) ($size MB)" -ForegroundColor Green
+        if (Test-Path "AppPackages") {
+          $msixFiles = Get-ChildItem -Path "AppPackages" -Recurse -File | 
+            Where-Object { $_.Extension -in @('.msix', '.msixbundle', '.appx', '.appxbundle') }
+          
+          if ($msixFiles) {
+            Write-Host "✓ MSIX 패키지 파일:" -ForegroundColor Green
+            foreach ($file in $msixFiles) {
+              $size = [math]::Round($file.Length / 1MB, 2)
+              Write-Host "  - $($file.Name) ($size MB)" -ForegroundColor White
             }
+          }
         } else {
           Write-Host "⚠ AppPackages 폴더가 생성되지 않았습니다" -ForegroundColor Yellow
         }
       shell: pwsh
 
-    # Get version from package
     - name: Get version from package
       id: version
+      working-directory: ${{ github.workspace }}\src
       run: |
-        $manifestPath = Get-ChildItem -Path "${{ github.workspace }}\AppPackages\" -Recurse -Filter "AppxManifest.xml" | Select-Object -First 1
+        $manifestPath = Get-ChildItem -Path "AppPackages" -Recurse -Filter "AppxManifest.xml" | Select-Object -First 1
         if ($manifestPath) {
           [xml]$manifest = Get-Content $manifestPath.FullName
           $version = $manifest.Package.Identity.Version
@@ -227,7 +163,6 @@ jobs:
         }
       shell: pwsh
 
-    # Upload to FTP
     - name: Upload to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -236,12 +171,12 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         port: ${{ secrets.FTP_PORT || 21 }}
         protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
-        local-dir: ./AppPackages/
+        local-dir: ${{ github.workspace }}/src/AppPackages/
         server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
         dangerous-clean-slate: false
 
-    # Create version file
     - name: Create version file
+      working-directory: ${{ github.workspace }}\src
       run: |
         $versionInfo = @{
           version = "${{ steps.version.outputs.VERSION }}"
@@ -253,7 +188,6 @@ jobs:
         Write-Host "✓ Version file created"
       shell: pwsh
 
-    # Upload version file to FTP
     - name: Upload version file to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -262,20 +196,18 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         port: ${{ secrets.FTP_PORT || 21 }}
         protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
-        local-dir: ./
+        local-dir: ${{ github.workspace }}/src/
         server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
         dangerous-clean-slate: false
         include: version.json
 
-    # Upload artifacts (v4로 업데이트)
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: MSIX-Package-${{ steps.version.outputs.VERSION }}
-        path: ./AppPackages/**/*
+        path: ${{ github.workspace }}/src/AppPackages/**/*
         retention-days: 30
 
-    # Cleanup certificate
     - name: Cleanup certificate
       if: always()
       run: |
