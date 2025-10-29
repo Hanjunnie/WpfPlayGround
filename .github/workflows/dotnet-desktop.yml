@@ -67,6 +67,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        path: src  # ← 추가!
 
     # Install .NET Core
     - name: Install .NET Core
@@ -86,6 +87,15 @@ jobs:
     - name: Add DevExpress NuGet feed
       run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
       continue-on-error: true
+
+    - name: Restore with RuntimeIdentifier
+      working-directory: ${{ github.workspace }}\src
+      run: |
+        # 솔루션 복원
+        nuget restore wpfplayGround.sln
+    
+        # RuntimeIdentifier 포함 복원 ⭐
+        dotnet restore WpfPlayground\WpfPlayground.csproj -r win-x64
 
     # 🎯 방법 1: dotnet restore (빠르고 효율적)
     - name: Restore .NET dependencies
@@ -119,12 +129,14 @@ jobs:
 
     # 🎯 옵션 B: MSBuild로 MSIX 패키지 생성 (메인)
     - name: Build MSIX package with MSBuild
+      working-directory: ${{ github.workspace }}\src
       run: |
         Write-Host "Building MSIX package..." -ForegroundColor Cyan
         
         msbuild ${{ env.Wap_Project_Path }} `
           /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
           /p:Platform=${{ env.BUILD_PLATFORM }} `
+          /p:RuntimeIdentifier=win-x64 `  # ← 추가!
           /p:UapAppxPackageBuildMode=SideloadOnly `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\" `
