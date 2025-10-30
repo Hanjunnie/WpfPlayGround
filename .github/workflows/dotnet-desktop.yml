@@ -97,10 +97,6 @@ jobs:
         # RuntimeIdentifier 포함 복원 ⭐
         dotnet restore WpfPlayground\WpfPlayground.csproj -r win-x64
 
-    # 🎯 방법 1: dotnet restore (빠르고 효율적)
-    - name: Restore .NET dependencies
-      run: dotnet restore ${{ env.App_Project_Path }}
-
     # 🎯 방법 2: NuGet restore (MSIX 프로젝트용)
     - name: Restore NuGet packages
       run: nuget restore ${{ env.Solution_Name }}
