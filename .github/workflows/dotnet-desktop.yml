@@ -36,202 +36,88 @@
 # For a complete CI/CD sample to get started with GitHub Action workflows for Desktop Applications,
 # refer to https://github.com/microsoft/github-actions-for-desktop-apps
 
-name: .NET Core Desktop - MSIX Deploy (Optimized)
+name: Build and Release MSIX
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+  workflow_dispatch:
 
 env:
-  # 프로젝트 설정
-  PROJECT_NAME: WpfPlayGround
-  Solution_Name: wpfplayGround.sln
-  App_Project_Path: WpfPlayGround/WpfPlayGround.csproj
-  
-  # MSIX 프로젝트 설정
-  Wap_Project_Directory: WpfPlayGround_msix
-  Wap_Project_Path: WpfPlayGround_msix\WpfPlayGround_msix.wapproj
-  
-  # 빌드 설정
-  BUILD_CONFIGURATION: Release
-  BUILD_PLATFORM: x64
+  PROJECT_PATH: WpfPlayground/WpfPlayground.csproj
+  WAPPROJ_PATH: WpfPlayground_msix/WpfPlayground_msix.wapproj
+  SOLUTION_PATH: WpfPlayground.sln
 
 jobs:
   build:
     runs-on: windows-latest
-
+    
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        path: src  # ← 추가!
-
-    # Install .NET Core
-    - name: Install .NET Core
+      
+    - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
-
-    # Setup MSBuild
-    - name: Setup MSBuild.exe
+        dotnet-version: '8.0.x'
+        
+    - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
       
-    # Setup NuGet
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v1
+    - name: Setup DevExpress NuGet Feed
+      run: |
+        dotnet nuget add source https://nuget.devexpress.com/api -n DXFeed -u DevExpress -p ${{ secrets.DEVEXPRESS_NUGET_KEY }} --store-password-in-clear-text
+      continue-on-error: true
       
-    # Add DevExpress NuGet feed (optional)
-    - name: Add DevExpress NuGet feed
-      run: dotnet nuget add source "${{ secrets.DEVEXPRESS_NUGET_KEY }}" --name DevExpress
-      continue-on-error: true
-
-    - name: Restore with RuntimeIdentifier
-      working-directory: ${{ github.workspace }}\src
-      run: |
-        # 솔루션 복원
-        nuget restore wpfplayGround.sln
-    
-        # RuntimeIdentifier 포함 복원 ⭐
-        dotnet restore WpfPlayground\WpfPlayground.csproj -r win-x64
-
-    # 🎯 방법 2: NuGet restore (MSIX 프로젝트용)
     - name: Restore NuGet packages
-      run: nuget restore ${{ env.Solution_Name }}
-
-    # Decode certificate
-    - name: Decode certificate
+      run: nuget restore ${{ env.SOLUTION_PATH }}
+      
+    - name: Decode and import certificate
       run: |
-        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
-        $pfxPath = Join-Path $env:TEMP "certificate.pfx"
-        [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-        echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Host "✓ Certificate prepared at: $pfxPath"
-      shell: pwsh
-
-    # 🚀 옵션 A: dotnet publish로 앱 빌드 (선택사항 - 디버깅용)
-    - name: Build app with dotnet publish (verification)
-      run: |
-        Write-Host "Building app to verify compilation..." -ForegroundColor Cyan
-        dotnet publish ${{ env.App_Project_Path }} `
-          -c ${{ env.BUILD_CONFIGURATION }} `
-          --no-restore `
-          -o ./publish-output
-        Write-Host "✓ App compiled successfully" -ForegroundColor Green
-      shell: pwsh
-      continue-on-error: true
-
-    # 🎯 옵션 B: MSBuild로 MSIX 패키지 생성 (메인)
-    - name: Build MSIX package with MSBuild
-      working-directory: ${{ github.workspace }}\src
-      run: |
-        Write-Host "Building MSIX package..." -ForegroundColor Cyan
+        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERTIFICATE_BASE64 }}")
+        $pfxPath = "certificate.pfx"
+        [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
         
-        msbuild ${{ env.Wap_Project_Path }} `
-          /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
-          /p:Platform=${{ env.BUILD_PLATFORM }} `
-          /p:RuntimeIdentifier=win-x64 `  # ← 추가!
-          /p:UapAppxPackageBuildMode=SideloadOnly `
+        Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "${{ secrets.CERTIFICATE_PASSWORD }}" -AsPlainText -Force)
+      shell: pwsh
+      
+    - name: Build MSIX package
+      run: |
+        msbuild ${{ env.WAPPROJ_PATH }} `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:UapAppxPackageBuildMode=StoreUpload `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}\AppPackages\" `
-          /p:PackageCertificateKeyFile="${{ env.CERT_PATH }}" `
-          /p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}" `
-          /verbosity:minimal
-        
-        Write-Host "✓ MSIX package built successfully" -ForegroundColor Green
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageSigningEnabled=true `
+          /p:PackageCertificateKeyFile="${{ github.workspace }}\certificate.pfx" `
+          /p:PackageCertificatePassword="${{ secrets.CERTIFICATE_PASSWORD }}"
       shell: pwsh
-
-    # Get version from package
-    - name: Get version from package
-      id: version
-      run: |
-        $manifestPath = Get-ChildItem -Path "${{ github.workspace }}\AppPackages\" -Recurse -Filter "AppxManifest.xml" | Select-Object -First 1
-        if ($manifestPath) {
-          [xml]$manifest = Get-Content $manifestPath.FullName
-          $version = $manifest.Package.Identity.Version
-          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "✓ Package version: $version" -ForegroundColor Green
-        } else {
-          Write-Host "⚠ AppxManifest.xml not found" -ForegroundColor Yellow
-          echo "VERSION=0.0.0.0" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        }
-      shell: pwsh
-
-    # Verify package
-    - name: Verify MSIX package
-      run: |
-        Write-Host "=== 생성된 파일 확인 ===" -ForegroundColor Cyan
-        
-        $msixFiles = Get-ChildItem -Path "${{ github.workspace }}\AppPackages\" -Recurse -Include "*.msix","*.msixbundle","*.appx","*.appxbundle"
-        
-        if ($msixFiles) {
-          Write-Host "✓ MSIX 패키지 파일:" -ForegroundColor Green
-          foreach ($file in $msixFiles) {
-            $relativePath = $file.FullName.Replace("${{ github.workspace }}\", "")
-            $sizeKB = [math]::Round($file.Length / 1KB, 2)
-            Write-Host "  - $relativePath ($sizeKB KB)" -ForegroundColor White
-          }
-        } else {
-          Write-Host "⚠ MSIX 패키지 파일을 찾을 수 없습니다" -ForegroundColor Yellow
-        }
-      shell: pwsh
-
-    # Upload to FTP
-    - name: Upload to FTP
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-      with:
-        server: ${{ secrets.FTP_SERVER }}
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        port: ${{ secrets.FTP_PORT || 21 }}
-        protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
-        local-dir: ./AppPackages/
-        server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
-        dangerous-clean-slate: false
-
-    # Create version file
-    - name: Create version file
-      run: |
-        $versionInfo = @{
-          version = "${{ steps.version.outputs.VERSION }}"
-          buildDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-          commitHash = "${{ github.sha }}"
-          commitMessage = "${{ github.event.head_commit.message }}"
-        }
-        $versionInfo | ConvertTo-Json | Out-File -FilePath "version.json"
-        Write-Host "✓ Version file created" -ForegroundColor Green
-      shell: pwsh
-
-    # Upload version file to FTP
-    - name: Upload version file to FTP
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-      with:
-        server: ${{ secrets.FTP_SERVER }}
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        port: ${{ secrets.FTP_PORT || 21 }}
-        protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
-        local-dir: ./
-        server-dir: /msix-packages/${{ env.PROJECT_NAME }}/
-        dangerous-clean-slate: false
-        include: version.json
-
-    # Upload artifacts
-    - name: Upload artifacts
+      
+    - name: Upload MSIX artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MSIX-Package-${{ steps.version.outputs.VERSION }}
-        path: ./AppPackages/**/*
-        retention-days: 30
-
-    # Cleanup
-    - name: Cleanup certificate
-      if: always()
-      run: |
-        if (Test-Path $env:CERT_PATH) {
-          Remove-Item $env:CERT_PATH -Force
-          Write-Host "✓ Certificate file cleaned up"
-        }
-      shell: pwsh
+        name: MSIX-Package
+        path: WpfPlayground_msix/appPackage/**/*
+        
+    # FTP 업로드 - 방법 1: FTP Deploy Action 사용 (권장)
+    - name: Upload to FTP Server
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21
+        protocol: ftps
+        local-dir: ./WpfPlayground_msix/AppPackages/    # ← 여기!
+        server-dir: /releases/${{ github.ref_name }}/   # ← FTP 서버 경로
+        dangerous-clean-slate: false
+        exclude: |
+          **/.git*
+          **/.git*/**
+          
