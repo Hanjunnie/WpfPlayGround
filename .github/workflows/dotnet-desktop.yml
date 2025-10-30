@@ -40,7 +40,7 @@ name: Build and Release MSIX
 
 on:
   push:
-    branches: [ main ]
+    branches: [ ActionTest ]
     tags:
       - 'v*'
   pull_request:
