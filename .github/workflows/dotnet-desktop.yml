@@ -73,13 +73,13 @@ jobs:
         dotnet nuget add source https://nuget.devexpress.com/api -n DXFeed -u DevExpress -p ${{ secrets.DEVEXPRESS_NUGET_KEY }} --store-password-in-clear-text
       continue-on-error: true
       
-    - name: Decode and import certificate
+    - name: Decode certificate
       run: |
         $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
-        $pfxPath = "WpfPlayGround_msix_TemporaryKey.pfx"
-        [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-        
-        Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "${{ secrets.CERTIFICATE_PASSWORD }}" -AsPlainText -Force)
+        $pfxPath = Join-Path $env:TEMP "certificate.pfx"
+        [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+        echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
       
     - name: Build MSIX package
