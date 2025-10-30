@@ -81,6 +81,14 @@ jobs:
         echo "CERT_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
         Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
+
+    - name: Restore packages with dotnet
+      run: |
+        Write-Host "📦 dotnet restore 실행..."
+        dotnet restore "${{ env.SOLUTION_PATH }}"
+        
+        Write-Host "✅ dotnet restore 완료"
+      shell: pwsh
       
     - name: Build MSIX package
       run: |
