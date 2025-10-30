@@ -71,10 +71,18 @@ jobs:
     - name: Setup NuGet
       uses: nuget/setup-nuget@v2
       
-    - name: Setup DevExpress NuGet Feed
+     # DevExpress 피드 등록
+    - name: Setup DevExpress Feed
       run: |
-        dotnet nuget add source https://nuget.devexpress.com/api -n DXFeed -u DevExpress -p ${{ secrets.DEVEXPRESS_NUGET_KEY }} --store-password-in-clear-text
-      continue-on-error: true
+          dotnet nuget add source https://nuget.devexpress.com/${{ secrets.DEVEXPRESS_NUGET_KEY }}/api `
+            -n DevExpress `
+            -u DevExpress `
+            -p ${{ secrets.DEVEXPRESS_NUGET_KEY }} `
+            --store-password-in-clear-text
+
+      # 패키지 복원
+    - name: Restore NuGet packages
+      run: nuget restore WpfPlayGround.sln
       
     - name: Decode certificate
       run: |
