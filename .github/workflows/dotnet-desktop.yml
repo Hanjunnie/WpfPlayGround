@@ -73,9 +73,6 @@ jobs:
         dotnet nuget add source https://nuget.devexpress.com/api -n DXFeed -u DevExpress -p ${{ secrets.DEVEXPRESS_NUGET_KEY }} --store-password-in-clear-text
       continue-on-error: true
       
-    - name: Restore NuGet packages
-      run: nuget restore ${{ env.SOLUTION_PATH }}
-      
     - name: Decode and import certificate
       run: |
         $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERTIFICATE_BASE64 }}")
