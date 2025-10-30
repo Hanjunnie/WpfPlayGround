@@ -67,6 +67,9 @@ jobs:
         
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: nuget/setup-nuget@v2
       
     - name: Setup DevExpress NuGet Feed
       run: |
@@ -82,12 +85,74 @@ jobs:
         Write-Host "✓ Certificate prepared at: $pfxPath"
       shell: pwsh
 
+    - name: Setup DevExpress NuGet Source
+      run: |
+        # dotnet CLI용 DevExpress 소스 추가
+        dotnet nuget remove source DevExpress 2>$null
+        dotnet nuget add source https://nuget.devexpress.com/api `
+          --name DevExpress `
+          --username DevExpress `
+          --password "${{ secrets.DEVEXPRESS_NUGET_KEY }}" `
+          --store-password-in-clear-text
+        
+        # NuGet.exe용 DevExpress 소스 추가
+        nuget sources Remove -Name DevExpress 2>$null
+        nuget sources Add -Name DevExpress `
+          -Source https://nuget.devexpress.com/api `
+          -Username DevExpress `
+          -Password "${{ secrets.DEVEXPRESS_NUGET_KEY }}" `
+          -StorePasswordInClearText
+        
+        Write-Host "✅ DevExpress NuGet 소스 추가 완료"
+      shell: pwsh
+      continue-on-error: false
+      
+    # 방법 1: dotnet restore (권장)
     - name: Restore packages with dotnet
       run: |
         Write-Host "📦 dotnet restore 실행..."
         dotnet restore "${{ env.SOLUTION_PATH }}"
         
         Write-Host "✅ dotnet restore 완료"
+      shell: pwsh
+      env:
+        DEVEXPRESS_NUGET_KEY: ${{ secrets.DEVEXPRESS_NUGET_KEY }}
+      
+    # project.assets.json 파일 확인
+    - name: Verify package restore
+      run: |
+        Write-Host "🔍 복원 결과 확인"
+        Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        $assetsFile = "WpfPlayground/obj/project.assets.json"
+        
+        if (Test-Path $assetsFile) {
+            Write-Host "✅ project.assets.json 파일 존재"
+            $fileSize = (Get-Item $assetsFile).Length
+            Write-Host "   파일 크기: $([math]::Round($fileSize/1KB, 2)) KB"
+        } else {
+            Write-Host "❌ project.assets.json 파일이 없습니다!"
+            Write-Host "   경로: $assetsFile"
+            
+            # obj 폴더 내용 확인
+            if (Test-Path "WpfPlayground/obj") {
+                Write-Host ""
+                Write-Host "obj 폴더 내용:"
+                Get-ChildItem "WpfPlayground/obj" -Recurse | ForEach-Object {
+                    Write-Host "  - $($_.FullName)"
+                }
+            }
+            
+            exit 1
+        }
+        
+        # 패키지 복원 로그 확인
+        Write-Host ""
+        Write-Host "📋 복원된 패키지:"
+        $packagesFolder = "WpfPlayground/obj/project.nuget.cache"
+        if (Test-Path $packagesFolder) {
+            Write-Host "  ✓ NuGet 캐시 존재"
+        }
       shell: pwsh
       
     - name: Build MSIX package
