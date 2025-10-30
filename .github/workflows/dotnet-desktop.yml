@@ -75,8 +75,8 @@ jobs:
       
     - name: Decode and import certificate
       run: |
-        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERTIFICATE_BASE64 }}")
-        $pfxPath = "certificate.pfx"
+        $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
+        $pfxPath = "WpfPlayGround_msix_TemporaryKey.pfx"
         [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
         
         Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "${{ secrets.CERTIFICATE_PASSWORD }}" -AsPlainText -Force)
